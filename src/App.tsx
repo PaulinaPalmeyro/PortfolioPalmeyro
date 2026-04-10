@@ -1,8 +1,11 @@
 import { PROFILE } from './content/bio'
+import { usePageTransition } from './context/PageTransitionContext'
 import { Playfield } from './components/Playfield'
 import { Typewriter } from './components/Typewriter'
 
 export function App() {
+  const { navigateWithFade } = usePageTransition()
+
   return (
     <div className="app">
       <div className="scanlines" aria-hidden="true" />
@@ -42,6 +45,15 @@ export function App() {
               </div>
               <h1 className="profile-name">{PROFILE.name}</h1>
               <p className="profile-about">{PROFILE.sobreMi}</p>
+              <div className="profile-contact-wrap">
+                <button
+                  type="button"
+                  className="profile-contact-btn"
+                  onClick={() => navigateWithFade('/seccion/contactame')}
+                >
+                  Contáctame
+                </button>
+              </div>
             </div>
           </div>
         </section>
@@ -66,7 +78,7 @@ export function App() {
 
       <footer className="site-footer">
         <p>
-          {new Date().getFullYear()} · Paulina Palmeyro
+          Abril del {new Date().getFullYear()} · Paulina Palmeyro Beltramo
         </p>
       </footer>
     </div>

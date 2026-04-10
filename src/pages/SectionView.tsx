@@ -6,6 +6,7 @@ import { ProyectosSection } from './ProyectosSection'
 import { TecnologiasSection } from './TecnologiasSection'
 import { CvSection } from './CvSection'
 import { VideoPresentacionSection } from './VideoPresentacionSection'
+import { ContactameSection } from './ContactameSection'
 
 const SECTION_TITLES: Record<string, string> = {
   proyectos: 'Proyectos',
@@ -14,6 +15,7 @@ const SECTION_TITLES: Record<string, string> = {
   'datos-personales': 'Datos personales',
   'tecnologias-herramientas': 'Tecnologías y herramientas',
   'video-presentacion': 'Video de presentación',
+  contactame: 'Contáctame',
 }
 
 export function SectionView() {
@@ -43,6 +45,10 @@ export function SectionView() {
 
   if (decoded === 'video-presentacion') {
     return <VideoPresentacionSection />
+  }
+
+  if (decoded === 'contactame') {
+    return <ContactameSection />
   }
 
   if (decoded === 'portfolio-top-3') {
