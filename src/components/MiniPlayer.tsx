@@ -1,5 +1,6 @@
 import type { RefObject } from 'react'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { CAVE_DWELL_MS, findCaveAtSprite } from '../content/caves'
 
 const STEP = 12
@@ -16,13 +17,18 @@ const EXIT_SLUG = '__EXIT__'
 
 export type ExitZoneDef = { cx: number; cy: number; rw: number; rh: number }
 
+type Offset = { ox: number; oy: number }
+
 type Props = {
   fieldRef: RefObject<HTMLDivElement | null>
   onEnterCave?: (slug: string) => void
   className?: string
   /** `forest`: colisión con árboles del mapa principal. `open`: área libre. */
   arena?: 'forest' | 'open'
-  /** Primera posición del sprite (esquina superior izquierda). Por defecto centro del campo. */
+  /**
+   * Punto de aparición en coords de esquina superior izquierda del sprite (como antes).
+   * `'center'` = centro geométrico del campo (no la cueva).
+   */
   spawn?: 'center' | ((fw: number, fh: number) => { x: number; y: number })
   /** Zona de la cueva de salida (mismas fracciones que en el mapa). Requiere `onExit`. */
   exitZone?: ExitZoneDef
@@ -77,10 +83,34 @@ function clampToField(px: number, py: number, fw: number, fh: number) {
   }
 }
 
-function centerSpawn(fw: number, fh: number) {
+function centerTopLeft(fw: number, fh: number) {
   const x = Math.round(fw / 2 - SIZE / 2)
   const y = Math.round(fh / 2 - SIZE / 2)
   return clampToField(x, y, fw, fh)
+}
+
+/** Origen del sistema de offset: esquina sup.-izq. del sprite si estuviera exactamente centrado. */
+function centerOrigin(fw: number, fh: number) {
+  return { cx: fw / 2 - SIZE / 2, cy: fh / 2 - SIZE / 2 }
+}
+
+function offsetToTopLeft(ox: number, oy: number, fw: number, fh: number) {
+  const { cx, cy } = centerOrigin(fw, fh)
+  return { x: cx + ox, y: cy + oy }
+}
+
+function clampOffset(ox: number, oy: number, fw: number, fh: number): Offset {
+  const maxX = Math.max(0, fw / 2 - SIZE / 2)
+  const maxY = Math.max(0, fh / 2 - SIZE / 2)
+  return {
+    ox: Math.min(Math.max(ox, -maxX), maxX),
+    oy: Math.min(Math.max(oy, -maxY), maxY),
+  }
+}
+
+function topLeftToOffset(px: number, py: number, fw: number, fh: number): Offset {
+  const { cx, cy } = centerOrigin(fw, fh)
+  return clampOffset(px - cx, py - cy, fw, fh)
 }
 
 function spriteInExitZone(
@@ -114,6 +144,20 @@ function findDwellSlug(
   return findCaveAtSprite(px, py, SIZE, fw, fh)
 }
 
+function readPlayAreaSize(
+  surface: HTMLDivElement | null,
+  field: HTMLDivElement | null,
+): { fw: number; fh: number } | null {
+  const tryEl = (el: HTMLDivElement | null) => {
+    if (!el) return null
+    const fw = el.clientWidth
+    const fh = el.clientHeight
+    if (fw >= SIZE && fh >= SIZE) return { fw, fh }
+    return null
+  }
+  return tryEl(surface) ?? tryEl(field)
+}
+
 export function MiniPlayer({
   fieldRef,
   onEnterCave,
@@ -123,34 +167,47 @@ export function MiniPlayer({
   exitZone,
   onExit,
 }: Props) {
-  const [pos, setPos] = useState({ x: 0, y: 0 })
-  const placedRef = useRef(false)
+  /** Desde el centro del campo: (0,0) = siempre en el medio visual (CSS 50% + translate). */
+  const [pos, setPos] = useState<Offset>({ ox: 0, oy: 0 })
   const posRef = useRef(pos)
   posRef.current = pos
+
+  const measureSurfaceRef = useRef<HTMLDivElement>(null)
+  const userMovedRef = useRef(false)
   const measureRafRef = useRef(0)
   const measureAttemptsRef = useRef(0)
-  /** Último tamaño del campo con el que sincronizamos (para detectar salto de layout tras carga). */
-  const lastSyncedSizeRef = useRef({ fw: 0, fh: 0 })
-  /** Un solo recentrado automático cuando el área pasa de muy chica a su tamaño real (evita quedar en 0,0). */
-  const didRecenterForGrowthRef = useRef(false)
   const dwellRef = useRef<{ slug: string; since: number } | null>(null)
   const caveFiringRef = useRef(false)
 
-  const firstSpawn = useCallback(
+  const firstSpawnTopLeft = useCallback(
     (fw: number, fh: number) => {
-      if (spawn === 'center') return centerSpawn(fw, fh)
+      if (spawn === 'center') return centerTopLeft(fw, fh)
       const p = spawn(fw, fh)
       return clampToField(p.x, p.y, fw, fh)
     },
     [spawn],
   )
 
+  const applySpawn = useCallback(
+    (fw: number, fh: number) => {
+      let tl = firstSpawnTopLeft(fw, fh)
+      let o = topLeftToOffset(tl.x, tl.y, fw, fh)
+      tl = offsetToTopLeft(o.ox, o.oy, fw, fh)
+      if (arena === 'forest' && spriteHitsTrees(tl.x, tl.y, fw, fh)) {
+        const c = centerTopLeft(fw, fh)
+        o = topLeftToOffset(c.x, c.y, fw, fh)
+      }
+      posRef.current = o
+      flushSync(() => {
+        setPos(o)
+      })
+    },
+    [arena, firstSpawnTopLeft],
+  )
+
   const syncPositionToField = useCallback(() => {
-    const el = fieldRef.current
-    if (!el) return
-    const fw = el.clientWidth
-    const fh = el.clientHeight
-    if (fw < SIZE || fh < SIZE) {
+    const dims = readPlayAreaSize(measureSurfaceRef.current, fieldRef.current)
+    if (!dims) {
       if (measureAttemptsRef.current > 120) return
       measureAttemptsRef.current += 1
       measureRafRef.current = requestAnimationFrame(() => {
@@ -160,102 +217,66 @@ export function MiniPlayer({
       return
     }
     measureAttemptsRef.current = 0
+    const { fw, fh } = dims
 
-    const prev = lastSyncedSizeRef.current
-    const prevTooSmall = prev.fw > 0 && (prev.fw < 160 || prev.fh < 160)
-    const grewSubstantially =
-      prev.fw > 0 &&
-      (fw > prev.fw * 1.12 ||
-        fh > prev.fh * 1.12 ||
-        fw > prev.fw + 72 ||
-        fh > prev.fh + 56)
-
-    if (!placedRef.current) {
-      placedRef.current = true
-      let c = firstSpawn(fw, fh)
-      if (arena === 'forest' && spriteHitsTrees(c.x, c.y, fw, fh)) {
-        c = centerSpawn(fw, fh)
-      }
-      posRef.current = c
-      setPos(c)
-      lastSyncedSizeRef.current = { fw, fh }
+    if (!userMovedRef.current) {
+      applySpawn(fw, fh)
       return
     }
 
-    if (!didRecenterForGrowthRef.current && prevTooSmall && grewSubstantially) {
-      didRecenterForGrowthRef.current = true
-      let c = firstSpawn(fw, fh)
-      if (arena === 'forest' && spriteHitsTrees(c.x, c.y, fw, fh)) {
-        c = centerSpawn(fw, fh)
-      }
-      posRef.current = c
-      setPos(c)
-      lastSyncedSizeRef.current = { fw, fh }
-      return
+    const { ox, oy } = posRef.current
+    let o = clampOffset(ox, oy, fw, fh)
+    let tl = offsetToTopLeft(o.ox, o.oy, fw, fh)
+    if (arena === 'forest' && spriteHitsTrees(tl.x, tl.y, fw, fh)) {
+      const c = centerTopLeft(fw, fh)
+      o = topLeftToOffset(c.x, c.y, fw, fh)
     }
-
-    const { x: px, y: py } = posRef.current
-    let { x, y } = clampToField(px, py, fw, fh)
-    if (arena === 'forest' && spriteHitsTrees(x, y, fw, fh)) {
-      const c = centerSpawn(fw, fh)
-      posRef.current = c
-      setPos(c)
-      lastSyncedSizeRef.current = { fw, fh }
-      return
+    if (o.ox !== ox || o.oy !== oy) {
+      posRef.current = o
+      setPos(o)
     }
-    if (x !== px || y !== py) {
-      const next = { x, y }
-      posRef.current = next
-      setPos(next)
-    }
-    lastSyncedSizeRef.current = { fw, fh }
-  }, [arena, fieldRef, firstSpawn])
+  }, [applySpawn, arena, fieldRef])
 
   useLayoutEffect(() => {
-    const el = fieldRef.current
-    if (!el) return
+    const surface = measureSurfaceRef.current
+    const field = fieldRef.current
+    if (!surface || !field) return
 
-    const kickPlacement = () => {
-      placedRef.current = false
-      measureAttemptsRef.current = 0
-      lastSyncedSizeRef.current = { fw: 0, fh: 0 }
-      didRecenterForGrowthRef.current = false
+    measureAttemptsRef.current = 0
+    const ro = new ResizeObserver(() => syncPositionToField())
+    ro.observe(surface)
+
+    syncPositionToField()
+    let rafInner = 0
+    const rafOuter = requestAnimationFrame(() => {
       syncPositionToField()
-    }
-
-    kickPlacement()
-    let raf1 = 0
-    let raf2 = 0
-    raf1 = requestAnimationFrame(() => {
-      kickPlacement()
-      raf2 = requestAnimationFrame(kickPlacement)
+      rafInner = requestAnimationFrame(() => syncPositionToField())
     })
 
-    const ro = new ResizeObserver(() => syncPositionToField())
-    ro.observe(el)
-
     return () => {
-      cancelAnimationFrame(raf1)
-      cancelAnimationFrame(raf2)
-      if (measureRafRef.current) cancelAnimationFrame(measureRafRef.current)
       ro.disconnect()
+      cancelAnimationFrame(rafOuter)
+      if (rafInner) cancelAnimationFrame(rafInner)
+      if (measureRafRef.current) cancelAnimationFrame(measureRafRef.current)
     }
   }, [fieldRef, syncPositionToField])
 
   const move = useCallback(
     (dx: number, dy: number) => {
-      const el = fieldRef.current
-      if (!el) return
-      const fw = el.clientWidth
-      const fh = el.clientHeight
-      if (fw < SIZE || fh < SIZE) return
+      userMovedRef.current = true
+      const dims = readPlayAreaSize(measureSurfaceRef.current, fieldRef.current)
+      if (!dims) return
+      const { fw, fh } = dims
 
       setPos((p) => {
-        let nx = p.x + dx
-        let ny = p.y + dy
-        ;({ x: nx, y: ny } = clampToField(nx, ny, fw, fh))
-        if (arena === 'forest' && spriteHitsTrees(nx, ny, fw, fh)) return p
-        return { x: nx, y: ny }
+        let ox = p.ox + dx
+        let oy = p.oy + dy
+        ;({ ox, oy } = clampOffset(ox, oy, fw, fh))
+        const tl = offsetToTopLeft(ox, oy, fw, fh)
+        if (arena === 'forest' && spriteHitsTrees(tl.x, tl.y, fw, fh)) return p
+        const next = { ox, oy }
+        posRef.current = next
+        return next
       })
     },
     [arena, fieldRef],
@@ -265,11 +286,11 @@ export function MiniPlayer({
     if (!onEnterCave && !onExit) return
     let raf = 0
     const tick = () => {
-      const el = fieldRef.current
-      if (el) {
-        const fw = el.clientWidth
-        const fh = el.clientHeight
-        const { x, y } = posRef.current
+      const dims = readPlayAreaSize(measureSurfaceRef.current, fieldRef.current)
+      if (dims) {
+        const { fw, fh } = dims
+        const { ox, oy } = posRef.current
+        const { x, y } = offsetToTopLeft(ox, oy, fw, fh)
         const slug = findDwellSlug(x, y, fw, fh, exitZone)
         const now = performance.now()
 
@@ -289,7 +310,7 @@ export function MiniPlayer({
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [exitZone, fieldRef, onEnterCave, onExit])
+  }, [exitZone, onEnterCave, onExit])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -312,13 +333,16 @@ export function MiniPlayer({
   }, [move])
 
   return (
-    <div
-      className={`mini-player-sprite ${className ?? ''}`}
-      style={{ transform: `translate(${pos.x}px, ${pos.y}px)` }}
-      aria-hidden="true"
-    >
-      <MiniSpriteSvg />
-    </div>
+    <>
+      <div ref={measureSurfaceRef} className="mini-player-measure-surface" aria-hidden />
+      <div
+        className={`mini-player-sprite ${className ?? ''}`}
+        style={{ transform: `translate(-50%, -50%) translate(${pos.ox}px, ${pos.oy}px)` }}
+        aria-hidden="true"
+      >
+        <MiniSpriteSvg />
+      </div>
+    </>
   )
 }
 

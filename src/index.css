@@ -748,15 +748,23 @@ button.tab--menu.tab--menu-current:disabled:hover {
   margin: 0.2rem 0 0;
 }
 
+/* Misma caja jugable que el sprite (inset 0); medimos acá para alinear colisiones y centro. */
+.mini-player-measure-surface {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* Centro del minijuego por CSS; el JS suma translate(ox,oy) desde ese punto. */
 .mini-player-sprite {
   position: absolute;
-  left: 0;
-  top: 0;
+  left: 50%;
+  top: 50%;
   z-index: 3;
   width: 28px;
   height: 28px;
   transition: transform 0.06s linear;
-  will-change: transform;
 }
 
 .mini-sprite-svg {
