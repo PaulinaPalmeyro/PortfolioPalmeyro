@@ -1,15 +1,19 @@
-import { useParams } from 'react-router-dom'
+import { Navigate, useParams } from 'react-router-dom'
 import { usePageTransition } from '../context/PageTransitionContext'
 import { DatosPersonalesSection } from './DatosPersonalesSection'
 import { PerfilProfesionalSection } from './PerfilProfesionalSection'
+import { ProyectosSection } from './ProyectosSection'
+import { TecnologiasSection } from './TecnologiasSection'
+import { CvSection } from './CvSection'
+import { VideoPresentacionSection } from './VideoPresentacionSection'
 
 const SECTION_TITLES: Record<string, string> = {
-  skills: 'Skills',
   proyectos: 'Proyectos',
-  contacto: 'Contacto',
+  cv: 'CV',
   'perfil-profesional': 'Perfil profesional',
   'datos-personales': 'Datos personales',
-  'portfolio-top-3': 'Sección 3',
+  'tecnologias-herramientas': 'Tecnologías y herramientas',
+  'video-presentacion': 'Video de presentación',
 }
 
 export function SectionView() {
@@ -23,6 +27,34 @@ export function SectionView() {
 
   if (decoded === 'datos-personales') {
     return <DatosPersonalesSection />
+  }
+
+  if (decoded === 'proyectos') {
+    return <ProyectosSection />
+  }
+
+  if (decoded === 'tecnologias-herramientas') {
+    return <TecnologiasSection />
+  }
+
+  if (decoded === 'cv') {
+    return <CvSection />
+  }
+
+  if (decoded === 'video-presentacion') {
+    return <VideoPresentacionSection />
+  }
+
+  if (decoded === 'portfolio-top-3') {
+    return <Navigate to="/seccion/video-presentacion" replace />
+  }
+
+  if (decoded === 'contacto') {
+    return <Navigate to="/seccion/cv" replace />
+  }
+
+  if (decoded === 'skills') {
+    return <Navigate to="/seccion/tecnologias-herramientas" replace />
   }
 
   const title = SECTION_TITLES[decoded] ?? decoded.replace(/-/g, ' ')
