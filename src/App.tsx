@@ -66,7 +66,7 @@ export function App() {
             </p>
             <h3 className="panel-subtitle">Movimiento</h3>
             <p className="info-text">
-              ¡Usa las flechas para moverte y descubrir mi portfolio! 
+              ¡Usa las flechas de tu teclado para moverte y descubrir mi portfolio! 
             </p>
             <Playfield />
             <div className="dpad-decor" aria-hidden="true">
