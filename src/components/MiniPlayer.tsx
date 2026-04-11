@@ -1,9 +1,18 @@
 import type { RefObject } from 'react'
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react'
 import { flushSync } from 'react-dom'
 import { CAVE_DWELL_MS, findCaveAtSprite } from '../content/caves'
 
-const STEP = 12
+export const MINI_PLAYER_STEP = 12
+const STEP = MINI_PLAYER_STEP
 export const MINI_PLAYER_SIZE = 28
 const SIZE = MINI_PLAYER_SIZE
 
@@ -33,6 +42,10 @@ type Props = {
   /** Zona de la cueva de salida (mismas fracciones que en el mapa). Requiere `onExit`. */
   exitZone?: ExitZoneDef
   onExit?: () => void
+}
+
+export type MiniPlayerHandle = {
+  move: (dx: number, dy: number) => void
 }
 
 function pointInTriangle(
@@ -158,15 +171,10 @@ function readPlayAreaSize(
   return tryEl(surface) ?? tryEl(field)
 }
 
-export function MiniPlayer({
-  fieldRef,
-  onEnterCave,
-  className,
-  arena = 'forest',
-  spawn = 'center',
-  exitZone,
-  onExit,
-}: Props) {
+export const MiniPlayer = forwardRef<MiniPlayerHandle, Props>(function MiniPlayer(
+  { fieldRef, onEnterCave, className, arena = 'forest', spawn = 'center', exitZone, onExit },
+  ref,
+) {
   /** Desde el centro del campo: (0,0) = siempre en el medio visual (CSS 50% + translate). */
   const [pos, setPos] = useState<Offset>({ ox: 0, oy: 0 })
   const posRef = useRef(pos)
@@ -282,6 +290,8 @@ export function MiniPlayer({
     [arena, fieldRef],
   )
 
+  useImperativeHandle(ref, () => ({ move }), [move])
+
   useEffect(() => {
     if (!onEnterCave && !onExit) return
     let raf = 0
@@ -344,7 +354,7 @@ export function MiniPlayer({
       </div>
     </>
   )
-}
+})
 
 function MiniSpriteSvg() {
   return (

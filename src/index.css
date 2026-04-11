@@ -774,20 +774,94 @@ button.tab--menu.tab--menu-current:disabled:hover {
   height: 28px;
 }
 
-.dpad-decor {
+/* Mapa + D-pad debajo (alineado a la izquierda) */
+.mini-game-stack {
   display: flex;
-  justify-content: flex-end;
-  margin-top: 0.75rem;
-  opacity: 0.65;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.55rem;
+  width: 100%;
 }
 
-.dpad {
-  width: 48px;
-  height: 48px;
-  background:
-    linear-gradient(var(--gb-dark), var(--gb-dark)) center/14px 44px no-repeat,
-    linear-gradient(var(--gb-dark), var(--gb-dark)) center/44px 14px no-repeat;
+.mini-game-touch-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  margin-top: 0.45rem;
+  padding: 0 0 0.15rem;
+  touch-action: manipulation;
+}
+
+.retro-dpad {
+  user-select: none;
+  -webkit-user-select: none;
+  filter: drop-shadow(3px 3px 0 rgba(92, 99, 56, 0.35));
+}
+
+/* Imagen pixel-art + capas táctiles por encima (zonas % respecto al sprite) */
+.retro-dpad__sprite-wrap {
+  position: relative;
+  display: inline-block;
+  line-height: 0;
+  max-width: min(168px, 42vw);
+  touch-action: none;
+}
+
+.retro-dpad__img {
+  display: block;
+  width: 100%;
+  height: auto;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
   image-rendering: pixelated;
+}
+
+/* Botones invisibles sobre cada brazo de la cruz; centro libre para evitar falsos toques */
+.retro-dpad__hit {
+  position: absolute;
+  margin: 0;
+  padding: 0;
+  border: none;
+  cursor: pointer;
+  touch-action: none;
+  background: transparent;
+  box-sizing: border-box;
+}
+
+.retro-dpad__hit:focus-visible {
+  outline: 2px solid var(--gb-mid);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.retro-dpad__hit--up {
+  left: 20%;
+  width: 60%;
+  top: 0;
+  height: 40%;
+}
+
+.retro-dpad__hit--down {
+  left: 20%;
+  width: 60%;
+  bottom: 0;
+  height: 40%;
+}
+
+.retro-dpad__hit--left {
+  left: 0;
+  width: 40%;
+  top: 20%;
+  height: 60%;
+}
+
+.retro-dpad__hit--right {
+  right: 0;
+  width: 40%;
+  top: 20%;
+  height: 60%;
 }
 
 .site-footer {
